@@ -185,14 +185,31 @@ StmtPtr Parser::parseStatement() {
         case Tok::KwReturn: return parseReturn();
         case Tok::KwFn: return parseFunction();
         case Tok::LBrace:  return parseBlock();
+        case Tok::KwWhile: return parseWhile();
         default: {
             uint32_t off = cur_.offset;
             ExprPtr e = parseExpr(0);
             if (!e) return nullptr;
+            if (accept(Tok::Assign)) {
+                if (e->kind != ExprKind::Ident) { error("invalid assignment target"); return nullptr; }
+                ExprPtr rhs = parseExpr(0);
+                if (!rhs) return nullptr;
+                expect(Tok::Semi, "expected ';'");
+                return std::make_unique<AssignStmt>(static_cast<IdentExpr&>(*e).name, std::move(rhs), off);
+            }
             expect(Tok::Semi, "expected ';'");
             return std::make_unique<ExprStmt>(std::move(e), off);
         }
     }
+}
+
+StmtPtr Parser::parseWhile() {
+    uint32_t off = cur_.offset;
+    advance();                                   // while
+    ExprPtr cond = parseExpr(0);
+    if (!cond) return nullptr;
+    StmtPtr body = parseBlock();
+    return std::make_unique<WhileStmt>(std::move(cond), std::move(body), off);
 }
 
 StmtPtr Parser::parseFunction() {

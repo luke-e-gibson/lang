@@ -251,6 +251,37 @@ bool CodeGen::genStmt(const Stmt& s) {
         scopes_.pop_back();
         return ok;
     }
+    case StmtKind::Assign: {
+        auto& a = static_cast<const AssignStmt&>(s);
+        Var* v = lookup(a.name);
+        if (!v) { fail("undefined variable '" + a.name + "'", s.offset); return false; }
+        Value* val = genExpr(*a.value);
+        if (!val) return false;
+        val = coerce(val, v->type);
+        if (!val) { fail("type mismatch in assignment", s.offset); return false; }
+        builder_.CreateStore(val, v->slot);
+        return true;
+    }
+    case StmtKind::While: {
+        auto& w = static_cast<const WhileStmt&>(s);
+        Function* fn = builder_.GetInsertBlock()->getParent();
+        auto* condBB = BasicBlock::Create(*ctx_, "while.cond", fn);
+        auto* bodyBB = BasicBlock::Create(*ctx_, "while.body", fn);
+        auto* endBB  = BasicBlock::Create(*ctx_, "while.end", fn);
+    
+        builder_.CreateBr(condBB);
+        builder_.SetInsertPoint(condBB);
+        Value* c = genExpr(*w.cond);
+        if (!c) return false;
+        builder_.CreateCondBr(c, bodyBB, endBB);
+    
+        builder_.SetInsertPoint(bodyBB);
+        if (!genStmt(*w.body)) return false;
+        if (!terminated()) builder_.CreateBr(condBB);
+    
+        builder_.SetInsertPoint(endBB);
+        return true;
+    }
     
     case StmtKind::If: return genIf(static_cast<const IfStmt&>(s));
     default:

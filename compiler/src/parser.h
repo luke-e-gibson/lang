@@ -33,6 +33,7 @@ private:
     StmtPtr parseReturn();
     StmtPtr parseIf();
     StmtPtr parseFunction();
+    StmtPtr parseWhile();
     std::unique_ptr<BlockStmt> parseBlock();
 };
 

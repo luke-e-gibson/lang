@@ -129,6 +129,20 @@ struct FunctionDecl : Stmt {
           returnType(std::move(r)), body(std::move(b)) {}
 };
 
+struct AssignStmt : Stmt {
+    std::string name;
+    ExprPtr value;
+    AssignStmt(std::string n, ExprPtr v, uint32_t off)
+        : Stmt(StmtKind::Assign, off), name(std::move(n)), value(std::move(v)) {}
+};
+
+struct WhileStmt : Stmt {
+    ExprPtr cond;
+    StmtPtr body;
+    WhileStmt(ExprPtr c, StmtPtr b, uint32_t off)
+        : Stmt(StmtKind::While, off), cond(std::move(c)), body(std::move(b)) {}
+};
+
 struct Program {
     std::vector<StmtPtr> items;
 };

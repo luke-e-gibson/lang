@@ -11,6 +11,32 @@ const char* tokName(Tok t) {
         case Tok::String: return "String";
         case Tok::KwFn: return "KwFn";
         case Tok::KwConst: return "KwConst";
+        case Tok::KwLet: return "KwLet";
+        case Tok::KwReturn: return "KwReturn";
+        case Tok::KwIf: return "KwIf";
+        case Tok::KwElse: return "KwElse";
+        case Tok::KwTrue: return "KwTrue";
+        case Tok::KwFalse: return "KwFalse";
+        case Tok::KwWhile: return "KwWhile";
+        case Tok::LParen: return "LParen";
+        case Tok::RParen: return "RParen";
+        case Tok::LBrace: return "LBrace";
+        case Tok::RBrace: return "RBrace";
+        case Tok::Comma: return "Comma";
+        case Tok::Semi: return "Semi";
+        case Tok::Colon: return "Colon";
+        case Tok::Plus: return "Plus";
+        case Tok::Minus: return "Minus";
+        case Tok::Star: return "Star";
+        case Tok::Slash: return "Slash";
+        case Tok::Assign: return "Assign";
+        case Tok::EqEq: return "EqEq";
+        case Tok::NotEq: return "NotEq";
+        case Tok::Lt: return "Lt";
+        case Tok::Le: return "Le";
+        case Tok::Gt: return "Gt";
+        case Tok::Ge: return "Ge";
+        case Tok::Arrow: return "Arrow";
         default: return "?";
     }
 }
@@ -87,7 +113,7 @@ Token Lexer::identifier(size_t start) {
     ++pos_;
   auto text = src_.substr(start, pos_ - start);
   static const std::unordered_map<std::string_view, Tok> keywords = {
-      {"fn", Tok::KwFn}, {"const", Tok::KwConst}, {"let", Tok::KwLet}, {"return", Tok::KwReturn},
+      {"fn", Tok::KwFn}, {"const", Tok::KwConst}, {"let", Tok::KwLet}, {"return", Tok::KwReturn}, {"while", Tok::KwWhile},
       {"if", Tok::KwIf}, {"else", Tok::KwElse},
       {"true", Tok::KwTrue}, {"false", Tok::KwFalse},
   };

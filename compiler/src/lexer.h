@@ -9,7 +9,10 @@ enum class Tok : uint8_t {
     Eof, Error,
     Ident, Int, Float, String,
     // keywords
-    KwFn, KwConst, KwLet, KwReturn, KwIf, KwElse, KwTrue, KwFalse,
+    KwFn, 
+    KwConst, KwLet, 
+    KwReturn, KwIf, KwElse, KwTrue, KwFalse,
+    KwWhile,
     // punctuation / operators
     LParen, RParen, LBrace, RBrace, Comma, Semi, Colon,
     Plus, Minus, Star, Slash,

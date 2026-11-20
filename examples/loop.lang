@@ -1,0 +1,13 @@
+fn sum(n: int) -> int {
+    let total = 0;
+    let i = 1;
+    while (i <= n) {
+        total = total + i;
+        i = i + 1;
+    }
+    return total;
+}
+
+fn main() -> void {
+    print(sum(100));
+}

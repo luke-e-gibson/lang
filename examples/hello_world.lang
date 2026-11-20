@@ -1,3 +1,6 @@
 fn main() -> void {
-    print("Hello, World!");
+    const a = "Hello, World!";
+    print(a);
+    a = "Goodbye, World!";
+    print(a);
 }
