@@ -1,4 +1,5 @@
 #include "repl.h"
+#include "lexer.h"
 #include <stdio.h>
 
 REPL::REPL() {}
@@ -16,6 +17,9 @@ void REPL::Run() {
             continue;
         }
         inputBuffer.push_back('\0');
-        std::printf("You entered: %s\n", inputBuffer.data());
+        Lexer lexer(std::string_view(inputBuffer.data()));
+        for(Token token = lexer.next(); token.kind != Tok::Eof; token = lexer.next()) {
+            printf("Token: %d, Text: '%.*s', Position: %u\n", (int)token.kind, (int)token.text.size(), token.text.data(), token.offset);
+        }
     }
 }
