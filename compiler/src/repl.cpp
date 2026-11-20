@@ -1,4 +1,5 @@
 #include "repl.h"
+#include "codegen.h"
 #include "parser.h"
 #include <stdio.h>
 
@@ -25,5 +26,11 @@ void REPL::Run() {
             printf("lex error at %u: %s\n", d.offset, d.message.c_str());
 
         for (auto& s : prog.items) dumpStmt(*s, 0);
+
+        if (parser.errors().empty()) {
+           CodeGen cg;
+           if (cg.generate(prog)) cg.print();
+           else for (auto& e : cg.errors()) printf("%s\n", e.c_str());
+        }
     }
 }

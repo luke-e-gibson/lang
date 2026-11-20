@@ -31,6 +31,7 @@ private:
     ExprPtr parsePrefix();
     StmtPtr parseVarDecl(bool isConst);
     StmtPtr parseReturn();
+    StmtPtr parseIf();
     std::unique_ptr<BlockStmt> parseBlock();
 };
 

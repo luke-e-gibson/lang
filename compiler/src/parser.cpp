@@ -160,10 +160,28 @@ std::unique_ptr<BlockStmt> Parser::parseBlock() {
     return std::make_unique<BlockStmt>(std::move(stmts), off);
 }
 
+StmtPtr Parser::parseIf() {
+    uint32_t off = cur_.offset;
+    advance();                                   // if
+    ExprPtr cond = parseExpr(0);                 // works with or without parentheses
+    if (!cond) return nullptr;
+
+    StmtPtr thenBranch = parseBlock();
+
+    StmtPtr elseBranch;
+    if (accept(Tok::KwElse)) {
+        if (check(Tok::KwIf)) elseBranch = parseIf();   // else if
+        else                  elseBranch = parseBlock();
+    }
+    return std::make_unique<IfStmt>(std::move(cond), std::move(thenBranch),
+                                    std::move(elseBranch), off);
+}
+
 StmtPtr Parser::parseStatement() {
     switch (cur_.kind) {
         case Tok::KwConst: return parseVarDecl(true);
         case Tok::KwLet:   return parseVarDecl(false);
+        case Tok::KwIf:    return parseIf();
         case Tok::KwReturn: return parseReturn();
         case Tok::LBrace:  return parseBlock();
         default: {
@@ -179,8 +197,13 @@ StmtPtr Parser::parseStatement() {
 Program Parser::parseProgram() {
     Program prog;
     while (!check(Tok::Eof)) {
-        if (StmtPtr s = parseStatement()) prog.items.push_back(std::move(s));
-        else synchronize();
+        uint32_t before = cur_.offset;
+        if (StmtPtr s = parseStatement()) {
+            prog.items.push_back(std::move(s));
+        } else {
+            synchronize();
+            if (!check(Tok::Eof) && cur_.offset == before) advance();  // no progress: skip a token
+        }
     }
     return prog;
 }
