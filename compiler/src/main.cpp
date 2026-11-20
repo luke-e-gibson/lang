@@ -1,6 +1,7 @@
 #include <stdio.h>
+#include "repl.h"
 
 int main(int argc, char **argv) {
-    printf("Hello, World!\n");
-    return 0;
+    REPL repl;
+    repl.Run();
 }
