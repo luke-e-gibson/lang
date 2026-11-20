@@ -24,7 +24,7 @@ void REPL::Run() {
         Parser parser(std::string_view(inputBuffer.data(), inputBuffer.size()));
         Program prog = parser.parseProgram();
 
-        for (auto& e : parser.errors()) printf("%s\n", e.c_str());
+        for (auto& e : parser.errors()) printf("%s\n", e.message.c_str());
         for (auto& d : parser.lexDiagnostics())
             printf("lex error at %u: %s\n", d.offset, d.message.c_str());
 
@@ -39,7 +39,7 @@ void REPL::Run() {
                if (!jitRun(cg.takeModule(), code, err))
                    printf("jit error: %s\n", err.c_str());
            } else {
-               for (auto& e : cg.errors()) printf("%s\n", e.c_str());
+               for (auto& e : cg.errors()) printf("%s\n", e.message.c_str());
            }
         }
     }

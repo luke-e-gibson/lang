@@ -1,5 +1,6 @@
 #pragma once
 #include "ast.h"
+#include "parser.h"
 #include "llvm/IR/Value.h"
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -15,7 +16,7 @@ public:
     bool generate(const Program& prog);          // false on error
     void print() { module_->print(llvm::outs(), nullptr); }
     llvm::Module& module() { return *module_; }
-    const std::vector<std::string>& errors() const { return errors_; }
+    const std::vector<Diag>& errors() const { return errors_; }
 
     llvm::orc::ThreadSafeModule takeModule() {
        return llvm::orc::ThreadSafeModule(std::move(module_), std::move(ctx_));
@@ -27,12 +28,16 @@ private:
     std::unique_ptr<llvm::Module> module_;
     llvm::IRBuilder<> builder_;
 
+    std::vector<Diag> errors_;
+    llvm::Value* fail(const std::string& msg, uint32_t offset) {
+        errors_.push_back({offset, msg});
+        return nullptr;
+    }
+
     struct Var { llvm::AllocaInst* slot; llvm::Type* type; bool isConst; };
     std::vector<std::map<std::string, Var>> scopes_;
-    std::vector<std::string> errors_;
     llvm::Function* currentFn_ = nullptr;
 
-    llvm::Value* fail(const std::string& msg, uint32_t offset);
     Var* lookup(const std::string& name);
     llvm::AllocaInst* createEntryAlloca(llvm::Type* ty, const std::string& name);
 

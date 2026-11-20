@@ -6,12 +6,7 @@ CodeGen::CodeGen()
     : ctx_(std::make_unique<LLVMContext>()),
       module_(std::make_unique<Module>("lang", *ctx_)),
       builder_(*ctx_) {}
-
-Value* CodeGen::fail(const std::string& msg, uint32_t offset) {
-    errors_.push_back("codegen error at " + std::to_string(offset) + ": " + msg);
-    return nullptr;
-}
-
+\
 CodeGen::Var* CodeGen::lookup(const std::string& name) {
     for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
         auto f = it->find(name);
@@ -90,9 +85,14 @@ bool CodeGen::generate(const Program& prog) {
         if (errors_.empty() && !terminated()) builder_.CreateRet(builder_.getInt32(0));
     }
 
+    if (!module_->getFunction("main")) {
+       fail("program has no 'main' function", 0);
+        return false;
+    }
+
     if (!errors_.empty()) return false;
-    if (llvm::verifyModule(*module_, &llvm::errs())) {
-        errors_.push_back("internal error: generated invalid IR");
+    if (llvm::verifyModule(*module_, &llvm::errs())) {\
+        this->fail("LLVM module verification failed", 0);
         return false;
     }
     return true;

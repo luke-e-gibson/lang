@@ -1,9 +1,5 @@
 #include "parser.h"
 
-void Parser::error(const char* msg) {
-    errors_.push_back("error at " + std::to_string(cur_.offset) + ": " + msg);
-}
-
 Token Parser::expect(Tok k, const char* msg) {
     Token t = cur_;
     if (!check(k)) { error(msg); return t; }   // don't consume on failure

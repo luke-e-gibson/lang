@@ -10,6 +10,7 @@
 #include "codegen.h"
 #include "emit.h"
 #include "jit.h"
+#include "source_map.h"
 
 namespace fs = std::filesystem;
 
@@ -44,27 +45,23 @@ static int compileFile(const std::string& input, std::string output,
         return 1;
     }
 
+    SourceMap sm(input, src);
+
     // `src` must outlive the parser and every token (they hold views into it).
     Parser parser(src);
     Program prog = parser.parseProgram();
-
+    
     bool failed = false;
-    for (auto& d : parser.lexDiagnostics()) {
-        fprintf(stderr, "%s:%s: %s\n", input.c_str(),
-                lineCol(src, d.offset).c_str(), d.message.c_str());
-        failed = true;
-    }
-    for (auto& e : parser.errors()) {
-        fprintf(stderr, "%s: %s\n", input.c_str(), e.c_str());
-        failed = true;
-    }
+    for (auto& d : parser.lexDiagnostics()) { fputs(sm.format(d.offset, d.message).c_str(), stderr); failed = true; }
+    for (auto& d : parser.errors()) { fputs(sm.format(d.offset, d.message).c_str(), stderr); failed = true; }
     if (failed) return 1;
 
     CodeGen cg;
     if (!cg.generate(prog)) {
-        for (auto& e : cg.errors()) fprintf(stderr, "%s\n", e.c_str());
+       for (auto& d : cg.errors()) fputs(sm.format(d.offset, d.message).c_str(), stderr);
         return 1;
     }
+    for (auto& d : cg.errors()) fputs(sm.format(d.offset, d.message).c_str(), stderr);
 
     if (emitIR) { cg.print(); return 0; }
 

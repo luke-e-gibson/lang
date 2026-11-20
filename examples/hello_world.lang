@@ -1,6 +1,2 @@
-fn main() -> void {
-    const a = "Hello, World!";
-    print(a);
-    a = "Goodbye, World!";
-    print(a);
-}
+fn main()
+{}
