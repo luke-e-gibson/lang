@@ -7,7 +7,7 @@ enum class Tok : uint8_t {
     Eof, Error,
     Ident, Int, Float, String,
     // keywords
-    KwFn, KwLet, KwReturn, KwIf, KwElse,
+    KwFn, KwConst, KwLet, KwReturn, KwIf, KwElse, KwTrue, KwFalse,
     // punctuation / operators
     LParen, RParen, LBrace, RBrace, Comma, Semi, Colon,
     Plus, Minus, Star, Slash,
@@ -25,8 +25,10 @@ public:
     explicit Lexer(std::string_view src) : src_(src) {}
 
     Token next();
+    std::string_view error() const { return error_; }
 
 private:
+    std::string_view error_;
     std::string_view src_;
     size_t pos_ = 0;
 

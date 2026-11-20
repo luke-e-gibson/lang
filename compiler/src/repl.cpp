@@ -19,6 +19,10 @@ void REPL::Run() {
         inputBuffer.push_back('\0');
         Lexer lexer(std::string_view(inputBuffer.data()));
         for(Token token = lexer.next(); token.kind != Tok::Eof; token = lexer.next()) {
+            if(token.kind == Tok::Error) {
+                printf("Parsing error at position %u: '%.*s'. %s\n", token.offset, (int)token.text.size(), token.text.data(), lexer.error().data());
+                break;
+            }
             printf("Token: %d, Text: '%.*s', Position: %u\n", (int)token.kind, (int)token.text.size(), token.text.data(), token.offset);
         }
     }

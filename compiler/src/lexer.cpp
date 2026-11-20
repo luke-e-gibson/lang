@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include <unordered_map>
 
 Token Lexer::next() {
     skipTrivia();
@@ -29,6 +30,8 @@ Token Lexer::next() {
         case '<': return match('=') ? make(Tok::Le, start) : make(Tok::Lt, start);
         case '>': return match('=') ? make(Tok::Ge, start) : make(Tok::Gt, start);
     }
+    
+    error_ = "Unknown character";
     return make(Tok::Error, start);  // unknown character
 }
 
@@ -67,8 +70,9 @@ Token Lexer::identifier(size_t start) {
     ++pos_;
   auto text = src_.substr(start, pos_ - start);
   static const std::unordered_map<std::string_view, Tok> keywords = {
-      {"fn", Tok::KwFn}, {"let", Tok::KwLet},   {"return", Tok::KwReturn},
+      {"fn", Tok::KwFn}, {"const", Tok::KwConst}, {"let", Tok::KwLet}, {"return", Tok::KwReturn},
       {"if", Tok::KwIf}, {"else", Tok::KwElse},
+      {"true", Tok::KwTrue}, {"false", Tok::KwFalse},
   };
   auto it = keywords.find(text);
   return make(it != keywords.end() ? it->second : Tok::Ident, start);
@@ -94,8 +98,10 @@ Token Lexer::string(size_t start) {
       ++pos_; // skip escaped char
     ++pos_;
   }
-  if (pos_ >= src_.size())
+  if (pos_ >= src_.size()) {
+    error_ = "Unterminated string literal";
     return make(Tok::Error, start); // unterminated
+  }
   ++pos_;                           // closing quote
   return make(Tok::String, start);
 }
