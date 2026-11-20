@@ -1,5 +1,6 @@
 #pragma once
 #include "ast.h"
+#include "llvm/IR/Value.h"
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -29,6 +30,7 @@ private:
     struct Var { llvm::AllocaInst* slot; llvm::Type* type; };
     std::vector<std::map<std::string, Var>> scopes_;
     std::vector<std::string> errors_;
+    llvm::Function* currentFn_ = nullptr;
 
     llvm::Value* fail(const std::string& msg, uint32_t offset);
     Var* lookup(const std::string& name);
@@ -38,6 +40,11 @@ private:
     llvm::Value* genBinary(const BinaryExpr& e);
     llvm::Value* genCall(const CallExpr& e);
     llvm::Value* genPrint(const CallExpr& e);
+    void genFunction(const FunctionDecl& f);
+
+    llvm::Type* lowerType(const std::string& name);
+    llvm::Value* coerce(llvm::Value* v, llvm::Type* to);
+
     bool genStmt(const Stmt& s);
     bool genIf(const IfStmt& s);
     bool terminated();

@@ -183,6 +183,7 @@ StmtPtr Parser::parseStatement() {
         case Tok::KwLet:   return parseVarDecl(false);
         case Tok::KwIf:    return parseIf();
         case Tok::KwReturn: return parseReturn();
+        case Tok::KwFn: return parseFunction();
         case Tok::LBrace:  return parseBlock();
         default: {
             uint32_t off = cur_.offset;
@@ -192,6 +193,32 @@ StmtPtr Parser::parseStatement() {
             return std::make_unique<ExprStmt>(std::move(e), off);
         }
     }
+}
+
+StmtPtr Parser::parseFunction() {
+    uint32_t off = cur_.offset;
+    advance();                                            // fn
+    Token name = expect(Tok::Ident, "expected function name");
+
+    std::vector<Param> params;
+    expect(Tok::LParen, "expected '('");
+    if (!check(Tok::RParen)) {
+        do {
+            Token pn = expect(Tok::Ident, "expected parameter name");
+            expect(Tok::Colon, "expected ':' after parameter name");
+            Token pt = expect(Tok::Ident, "expected parameter type");
+            params.push_back({std::string(pn.text), std::string(pt.text)});
+        } while (accept(Tok::Comma));
+    }
+    expect(Tok::RParen, "expected ')'");
+
+    std::string ret;                                      // empty = void
+    if (accept(Tok::Arrow))
+        ret = std::string(expect(Tok::Ident, "expected return type").text);
+
+    auto body = parseBlock();
+    return std::make_unique<FunctionDecl>(std::string(name.text), std::move(params),
+                                          std::move(ret), std::move(body), off);
 }
 
 Program Parser::parseProgram() {

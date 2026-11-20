@@ -32,6 +32,7 @@ private:
     StmtPtr parseVarDecl(bool isConst);
     StmtPtr parseReturn();
     StmtPtr parseIf();
+    StmtPtr parseFunction();
     std::unique_ptr<BlockStmt> parseBlock();
 };
 

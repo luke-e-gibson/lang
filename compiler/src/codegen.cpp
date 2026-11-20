@@ -27,21 +27,71 @@ AllocaInst* CodeGen::createEntryAlloca(llvm::Type* ty, const std::string& name) 
     return tmp.CreateAlloca(ty, nullptr, name);
 }
 
-bool CodeGen::generate(const Program& prog) {
-    auto* fty = FunctionType::get(builder_.getInt32Ty(), false);
-    auto* fn = Function::Create(fty, Function::ExternalLinkage, "main", *module_);
-    builder_.SetInsertPoint(BasicBlock::Create(*ctx_, "entry", fn));
+llvm::Type* CodeGen::lowerType(const std::string& n) {
+    if (n.empty() || n == "void") return builder_.getVoidTy();
+    if (n == "int" || n == "i64")  return builder_.getInt64Ty();
+    if (n == "i32")                return builder_.getInt32Ty();
+    if (n == "bool")               return builder_.getInt1Ty();
+    if (n == "f64" || n == "float")return builder_.getDoubleTy();
+    if (n == "string")             return builder_.getPtrTy();
+    return nullptr;                // unknown type
+}
 
-    scopes_.emplace_back();
+// Lenient conversion until you have a real type checker.
+llvm::Value* CodeGen::coerce(llvm::Value* v, llvm::Type* to) {
+    if (v->getType() == to) return v;
+    if (v->getType()->isIntegerTy() && to->isIntegerTy())
+        return builder_.CreateIntCast(v, to, /*isSigned=*/true);
+    return nullptr;
+}
+
+bool CodeGen::generate(const Program& prog) {
+    // Pass 1: declare
+    bool hasMain = false;
     for (auto& s : prog.items) {
-        if (!genStmt(*s)) break;
+        if (s->kind != StmtKind::Function) continue;
+        auto& f = static_cast<const FunctionDecl&>(*s);
+        if (module_->getFunction(f.name)) { fail("duplicate function '" + f.name + "'", f.offset); continue; }
+
+        std::vector<llvm::Type*> ptys;
+        for (auto& p : f.params) {
+            llvm::Type* t = lowerType(p.typeName);
+            if (!t || t->isVoidTy()) { fail("unknown type '" + p.typeName + "'", f.offset); t = builder_.getInt64Ty(); }
+            ptys.push_back(t);
+        }
+        llvm::Type* rt = lowerType(f.returnType);
+        if (!rt) { fail("unknown return type '" + f.returnType + "'", f.offset); rt = builder_.getVoidTy(); }
+        if (f.name == "main") { hasMain = true; if (rt->isVoidTy()) rt = builder_.getInt32Ty(); }
+
+        auto* fty = llvm::FunctionType::get(rt, ptys, false);
+        auto* fn = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, f.name, *module_);
+        unsigned i = 0;
+        for (auto& a : fn->args()) a.setName(f.params[i++].name);
     }
-    scopes_.pop_back();
+    if (!errors_.empty()) return false;
+
+    // Pass 2: function bodies
+    for (auto& s : prog.items)
+        if (s->kind == StmtKind::Function) genFunction(static_cast<const FunctionDecl&>(*s));
+
+    // Pass 3: loose top-level statements
+    bool loose = false;
+    for (auto& s : prog.items) if (s->kind != StmtKind::Function) loose = true;
+    if (loose) {
+        if (hasMain) { fail("top-level statements cannot be mixed with 'fn main'", 0); return false; }
+        auto* fty = llvm::FunctionType::get(builder_.getInt32Ty(), false);
+        auto* fn = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, "main", *module_);
+        currentFn_ = fn;
+        builder_.SetInsertPoint(llvm::BasicBlock::Create(*ctx_, "entry", fn));
+        scopes_.emplace_back();
+        for (auto& s : prog.items)
+            if (s->kind != StmtKind::Function && !genStmt(*s)) break;
+        scopes_.pop_back();
+        if (errors_.empty() && !terminated()) builder_.CreateRet(builder_.getInt32(0));
+    }
 
     if (!errors_.empty()) return false;
-    if (!terminated()) builder_.CreateRet(builder_.getInt32(0));
-
-    if (verifyFunction(*fn, &errs()) || verifyModule(*module_, &errs())) {
+    if (llvm::verifyModule(*module_, &llvm::errs())) {
         errors_.push_back("internal error: generated invalid IR");
         return false;
     }
@@ -129,10 +179,13 @@ Value* CodeGen::genCall(const CallExpr& e) {
     if (!fn) return fail("undefined function '" + name + "'", e.offset);
     if (fn->arg_size() != e.args.size()) return fail("wrong argument count", e.offset);
 
-    std::vector<Value*> args;
+    std::vector<llvm::Value*> args;
+    unsigned i = 0;
     for (auto& a : e.args) {
-        Value* v = genExpr(*a);
+        llvm::Value* v = genExpr(*a);
         if (!v) return nullptr;
+        v = coerce(v, fn->getFunctionType()->getParamType(i++));
+        if (!v) return fail("argument type mismatch", a->offset);
         args.push_back(v);
     }
     return builder_.CreateCall(fn, args);
@@ -166,7 +219,7 @@ bool CodeGen::genStmt(const Stmt& s) {
     case StmtKind::VarDecl: {
         auto& d = static_cast<const VarDecl&>(s);
         Value* init = genExpr(*d.init);
-        if (!init) return false;
+        if (init->getType()->isVoidTy()) { fail("cannot assign a void value", s.offset); return false; }
         AllocaInst* slot = createEntryAlloca(init->getType(), d.name);
         builder_.CreateStore(init, slot);
         scopes_.back()[d.name] = {slot, init->getType()};
@@ -174,10 +227,18 @@ bool CodeGen::genStmt(const Stmt& s) {
     }
     case StmtKind::Return: {
         auto& r = static_cast<const ReturnStmt&>(s);
-        if (!r.value) { builder_.CreateRet(builder_.getInt32(0)); return true; }
-        Value* v = genExpr(*r.value);
+        llvm::Type* rt = currentFn_->getReturnType();
+        if (rt->isVoidTy()) {
+            if (r.value) { fail("void function cannot return a value", s.offset); return false; }
+            builder_.CreateRetVoid();
+            return true;
+        }
+        if (!r.value) { fail("missing return value", s.offset); return false; }
+        llvm::Value* v = genExpr(*r.value);
         if (!v) return false;
-        builder_.CreateRet(builder_.CreateZExtOrTrunc(v, builder_.getInt32Ty()));
+        v = coerce(v, rt);
+        if (!v) { fail("return type mismatch", s.offset); return false; }
+        builder_.CreateRet(v);
         return true;
     }
     case StmtKind::ExprStmt:
@@ -190,6 +251,7 @@ bool CodeGen::genStmt(const Stmt& s) {
         scopes_.pop_back();
         return ok;
     }
+    
     case StmtKind::If: return genIf(static_cast<const IfStmt&>(s));
     default:
         fail("statement not supported yet", s.offset);
@@ -226,7 +288,32 @@ bool CodeGen::genIf(const IfStmt& s) {
     return true;
 }
 
+void CodeGen::genFunction(const FunctionDecl& f) {
+    llvm::Function* fn = module_->getFunction(f.name);
+    currentFn_ = fn;
+    builder_.SetInsertPoint(llvm::BasicBlock::Create(*ctx_, "entry", fn));
+
+    scopes_.emplace_back();
+    for (auto& arg : fn->args()) {                    // each parameter gets a stack slot
+        auto* slot = createEntryAlloca(arg.getType(), std::string(arg.getName()));
+        builder_.CreateStore(&arg, slot);
+        scopes_.back()[std::string(arg.getName())] = {slot, arg.getType()};
+    }
+
+    genStmt(*f.body);
+    scopes_.pop_back();
+
+    if (!errors_.empty()) return;
+    if (!terminated()) {
+        llvm::Type* rt = fn->getReturnType();
+        if (rt->isVoidTy())                  builder_.CreateRetVoid();
+        else if (f.name == "main")           builder_.CreateRet(llvm::ConstantInt::get(rt, 0));
+        else                                 builder_.CreateUnreachable();   // see note below
+    }
+}
+
 bool CodeGen::terminated() {
     BasicBlock* bb = builder_.GetInsertBlock();
     return !bb->empty() && bb->back().isTerminator();
 }
+
