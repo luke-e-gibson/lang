@@ -2,6 +2,8 @@
 #include <string_view>
 #include <cstdint>
 #include <cctype>
+#include <vector>
+#include <string>
 
 enum class Tok : uint8_t {
     Eof, Error,
@@ -22,13 +24,15 @@ struct Token {
 
 class Lexer {
 public:
+    struct Diagnostic { uint32_t offset; std::string message; };
     explicit Lexer(std::string_view src) : src_(src) {}
 
     Token next();
-    std::string_view error() const { return error_; }
+    const std::vector<Diagnostic>& diagnostics() const { return diags_; }
 
 private:
-    std::string_view error_;
+    std::vector<Diagnostic> diags_;   // in Lexer
+
     std::string_view src_;
     size_t pos_ = 0;
 
@@ -45,4 +49,8 @@ private:
     Token identifier(size_t start);
     Token number(size_t start);
     Token string(size_t start);
+
+    void report(size_t at, const char* msg) {
+        diags_.push_back({static_cast<uint32_t>(at), msg});
+    }
 };

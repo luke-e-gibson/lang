@@ -1,6 +1,20 @@
 #include "lexer.h"
 #include <unordered_map>
 
+const char* tokName(Tok t) {
+  switch (t) {
+        case Tok::Eof: return "Eof";
+        case Tok::Error: return "Error";
+        case Tok::Ident: return "Ident";
+        case Tok::Int: return "Int";
+        case Tok::Float: return "Float";
+        case Tok::String: return "String";
+        case Tok::KwFn: return "KwFn";
+        case Tok::KwConst: return "KwConst";
+        default: return "?";
+    }
+}
+
 Token Lexer::next() {
     skipTrivia();
     if (pos_ >= src_.size()) return make(Tok::Eof, pos_);
@@ -31,7 +45,7 @@ Token Lexer::next() {
         case '>': return match('=') ? make(Tok::Ge, start) : make(Tok::Gt, start);
     }
     
-    error_ = "Unknown character";
+    report(start, "Unknown character");
     return make(Tok::Error, start);  // unknown character
 }
 
@@ -58,11 +72,14 @@ void Lexer::skipTrivia() {
 }
 
 void Lexer::skipBlockComment() {
+  size_t start = pos_;
   pos_ += 2;
   while (pos_ < src_.size() && !(peek() == '*' && peek(1) == '/'))
     ++pos_;
-  if (pos_ < src_.size())
-    pos_ += 2; // else: unterminated, report an error here
+  if (pos_ >= src_.size())
+    report(start, "Unterminated block comment");
+  else
+    pos_ += 2;
 }
 
 Token Lexer::identifier(size_t start) {
@@ -99,7 +116,7 @@ Token Lexer::string(size_t start) {
     ++pos_;
   }
   if (pos_ >= src_.size()) {
-    error_ = "Unterminated string literal";
+    report(start, "Unterminated string literal");
     return make(Tok::Error, start); // unterminated
   }
   ++pos_;                           // closing quote

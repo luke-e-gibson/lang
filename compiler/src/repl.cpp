@@ -1,5 +1,5 @@
 #include "repl.h"
-#include "lexer.h"
+#include "parser.h"
 #include <stdio.h>
 
 REPL::REPL() {}
@@ -8,22 +8,22 @@ void REPL::Run() {
     while (running) {
         printf("compiler> ");
         inputBuffer.clear();
-        char c;
+        int c;
         while ((c = getchar()) != '\n' && c != EOF) {
-            inputBuffer.push_back(c);
+            inputBuffer.push_back(static_cast<char>(c));
         }
         if (c == EOF) {
             running = false;
             continue;
         }
-        inputBuffer.push_back('\0');
-        Lexer lexer(std::string_view(inputBuffer.data()));
-        for(Token token = lexer.next(); token.kind != Tok::Eof; token = lexer.next()) {
-            if(token.kind == Tok::Error) {
-                printf("Parsing error at position %u: '%.*s'. %s\n", token.offset, (int)token.text.size(), token.text.data(), lexer.error().data());
-                break;
-            }
-            printf("Token: %d, Text: '%.*s', Position: %u\n", (int)token.kind, (int)token.text.size(), token.text.data(), token.offset);
-        }
+
+        Parser parser(std::string_view(inputBuffer.data(), inputBuffer.size()));
+        Program prog = parser.parseProgram();
+
+        for (auto& e : parser.errors()) printf("%s\n", e.c_str());
+        for (auto& d : parser.lexDiagnostics())
+            printf("lex error at %u: %s\n", d.offset, d.message.c_str());
+
+        for (auto& s : prog.items) dumpStmt(*s, 0);
     }
 }
