@@ -13,6 +13,7 @@ public:
     CodeGen();
     bool generate(const Program& prog);          // false on error
     void print() { module_->print(llvm::outs(), nullptr); }
+    llvm::Module& module() { return *module_; }
     const std::vector<std::string>& errors() const { return errors_; }
 
     llvm::orc::ThreadSafeModule takeModule() {
