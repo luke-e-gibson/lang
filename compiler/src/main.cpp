@@ -5,6 +5,14 @@
 #include <string>
 #include <filesystem>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
+#include "compiler_config.h"
 #include "repl.h"
 #include "parser.h"
 #include "codegen.h"
@@ -13,6 +21,56 @@
 #include "source_map.h"
 
 namespace fs = std::filesystem;
+
+#ifdef _WIN32
+static std::wstring toWide(const std::string& value) {
+    if (value.empty()) return {};
+    int size = MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, nullptr, 0);
+    if (size <= 0) return {};
+    std::wstring result(static_cast<size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, result.data(), size);
+    if (!result.empty() && result.back() == L'\0') result.pop_back();
+    return result;
+}
+
+static std::wstring windowsQuote(const std::string& value) {
+    std::wstring result = L"\"";
+    std::wstring wide = toWide(value);
+    size_t backslashes = 0;
+    for (wchar_t c : wide) {
+        if (c == L'\\') {
+            ++backslashes;
+        } else {
+            if (c == L'"') result.append(backslashes * 2 + 1, L'\\');
+            else result.append(backslashes, L'\\');
+            backslashes = 0;
+            result += c;
+        }
+    }
+    result.append(backslashes, L'\\');
+    result += L'"';
+    return result;
+}
+
+static int runWindows(const std::string& executable,
+                      const std::wstring& arguments) {
+    std::wstring application = toWide(executable);
+    std::wstring commandLine = windowsQuote(executable) + L" " + arguments;
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(application.c_str(), commandLine.data(), nullptr, nullptr,
+                        FALSE, 0, nullptr, nullptr, &startup, &process)) {
+        return 1;
+    }
+    WaitForSingleObject(process.hProcess, INFINITE);
+    DWORD exitCode = 1;
+    GetExitCodeProcess(process.hProcess, &exitCode);
+    CloseHandle(process.hProcess);
+    CloseHandle(process.hThread);
+    return static_cast<int>(exitCode);
+}
+#endif
 
 static bool readFile(const std::string& path, std::string& out) {
     std::ifstream f(path, std::ios::binary);
@@ -24,7 +82,7 @@ static bool readFile(const std::string& path, std::string& out) {
 }
 
 static void usage() {
-    printf("usage: compiler [file.lang] [-o out.exe] [--run] [--emit-ir] [--emit-obj]\n"
+    printf("usage: compiler [file.lang] [-o output] [--run] [--emit-ir] [--emit-obj]\n"
            "       compiler            (no arguments starts the REPL)\n");
 }
 
@@ -66,9 +124,11 @@ static int compileFile(const std::string& input, std::string output,
     if (emitIR) { cg.print(); return 0; }
 
     fs::path in(input);
-    fs::path exePath = output.empty() ? in.stem().string() + ".exe" : output;
+    fs::path exePath = output.empty()
+        ? in.stem().string() + LANG_EXECUTABLE_SUFFIX
+        : output;
     fs::path objPath = exePath;
-    objPath.replace_extension(".obj");
+    objPath.replace_extension(LANG_OBJECT_SUFFIX);
 
     std::string err;
     if (!emitObjectFile(cg.module(), objPath.string(), err)) {
@@ -77,22 +137,35 @@ static int compileFile(const std::string& input, std::string output,
     }
     if (emitObj) { printf("wrote %s\n", objPath.string().c_str()); return 0; }
 
-    // Needs link.exe on PATH, which a Developer Command Prompt provides.
-    std::string cmd = "link /NOLOGO /SUBSYSTEM:CONSOLE \"/OUT:" + exePath.string() + "\" \"" +
-                      objPath.string() +
-                      "\" /DEFAULTLIB:libcmt /DEFAULTLIB:legacy_stdio_definitions";
-    int rc = std::system(("\"" + cmd + "\"").c_str());
+    // Let the compiler driver select the native linker and runtime libraries.
+#ifdef _WIN32
+    std::wstring arguments = windowsQuote(objPath.string()) + L" " +
+                             toWide(LANG_LINK_OUTPUT_OPTION) +
+                             windowsQuote(exePath.string()) + L" " +
+                             toWide(LANG_LINK_FLAGS);
+    int rc = runWindows(LANG_CXX_COMPILER, arguments);
+#else
+    std::string cmd = shellQuote(LANG_CXX_COMPILER) + " " +
+                      shellQuote(objPath.string()) + " " +
+                      LANG_LINK_OUTPUT_OPTION;
+    if (LANG_LINK_OUTPUT_NEEDS_SPACE) cmd += " ";
+    cmd += shellQuote(exePath.string());
+    int rc = std::system(cmd.c_str());
+#endif
     fs::remove(objPath);
     if (rc != 0) {
-        fprintf(stderr, "error: linking failed (is link.exe on PATH? "
-                        "use a Developer Command Prompt)\n");
+        fprintf(stderr, "error: linking failed (is the configured C++ compiler available?)\n");
         return 1;
     }
     printf("wrote %s\n", exePath.string().c_str());
 
     if (run) {
-        std::string runCmd = "\"" + fs::absolute(exePath).string() + "\"";
-        return std::system(("\"" + runCmd + "\"").c_str());
+#ifdef _WIN32
+        fs::path absoluteExe = fs::absolute(exePath);
+        return runWindows(absoluteExe.string(), L"");
+#else
+        return std::system(shellQuote(fs::absolute(exePath).string()).c_str());
+#endif
     }
     return 0;
 }
