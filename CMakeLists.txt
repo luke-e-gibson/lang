@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.16)
-project(ROOT)
+cmake_minimum_required(VERSION 3.20)
+project(ROOT CXX)
+set(CMAKE_CXX_STANDARD 17)
 
-include(compiler)
+add_subdirectory(vendor)
+add_subdirectory(compiler)
