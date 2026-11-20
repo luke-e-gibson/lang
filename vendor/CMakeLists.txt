@@ -11,5 +11,5 @@ target_include_directories(llvm_deps SYSTEM INTERFACE
     ${CMAKE_CURRENT_BINARY_DIR}/llvm/llvm/include)
 target_link_libraries(llvm_deps INTERFACE
     LLVMCore LLVMSupport LLVMIRReader LLVMPasses
-    LLVMOrcJIT LLVMExecutionEngine LLVMNativeCodeGen
+    LLVMOrcJIT LLVMExecutionEngine
     LLVMX86CodeGen LLVMX86AsmParser LLVMX86Desc LLVMX86Info)

@@ -1,9 +1,12 @@
 #include "repl.h"
 #include "codegen.h"
+#include "jit.h"
 #include "parser.h"
 #include <stdio.h>
 
-REPL::REPL() {}
+REPL::REPL() {
+    jitInit();
+}
 
 void REPL::Run() {
     while (running) {
@@ -29,8 +32,15 @@ void REPL::Run() {
 
         if (parser.errors().empty()) {
            CodeGen cg;
-           if (cg.generate(prog)) cg.print();
-           else for (auto& e : cg.errors()) printf("%s\n", e.c_str());
+           if (cg.generate(prog)) {
+               // cg.print();   // uncomment to see the IR
+               int code = 0;
+               std::string err;
+               if (!jitRun(cg.takeModule(), code, err))
+                   printf("jit error: %s\n", err.c_str());
+           } else {
+               for (auto& e : cg.errors()) printf("%s\n", e.c_str());
+           }
         }
     }
 }

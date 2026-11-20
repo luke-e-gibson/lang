@@ -3,6 +3,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <map>
 #include <string>
 #include <vector>
@@ -14,9 +15,13 @@ public:
     void print() { module_->print(llvm::outs(), nullptr); }
     const std::vector<std::string>& errors() const { return errors_; }
 
+    llvm::orc::ThreadSafeModule takeModule() {
+       return llvm::orc::ThreadSafeModule(std::move(module_), std::move(ctx_));
+    }
+
 private:
     // Order matters: context must be declared first, so it is destroyed last.
-    llvm::LLVMContext ctx_;
+    std::unique_ptr<llvm::LLVMContext> ctx_;
     std::unique_ptr<llvm::Module> module_;
     llvm::IRBuilder<> builder_;
 

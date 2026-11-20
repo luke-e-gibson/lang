@@ -3,7 +3,9 @@
 using namespace llvm;
 
 CodeGen::CodeGen()
-    : module_(std::make_unique<Module>("lang", ctx_)), builder_(ctx_) {}
+    : ctx_(std::make_unique<LLVMContext>()),
+      module_(std::make_unique<Module>("lang", *ctx_)),
+      builder_(*ctx_) {}
 
 Value* CodeGen::fail(const std::string& msg, uint32_t offset) {
     errors_.push_back("codegen error at " + std::to_string(offset) + ": " + msg);
@@ -28,7 +30,7 @@ AllocaInst* CodeGen::createEntryAlloca(llvm::Type* ty, const std::string& name) 
 bool CodeGen::generate(const Program& prog) {
     auto* fty = FunctionType::get(builder_.getInt32Ty(), false);
     auto* fn = Function::Create(fty, Function::ExternalLinkage, "main", *module_);
-    builder_.SetInsertPoint(BasicBlock::Create(ctx_, "entry", fn));
+    builder_.SetInsertPoint(BasicBlock::Create(*ctx_, "entry", fn));
 
     scopes_.emplace_back();
     for (auto& s : prog.items) {
@@ -204,9 +206,9 @@ bool CodeGen::genIf(const IfStmt& s) {
     }
 
     Function* fn = builder_.GetInsertBlock()->getParent();
-    auto* thenBB  = BasicBlock::Create(ctx_, "then", fn);
-    auto* elseBB  = s.elseBranch ? BasicBlock::Create(ctx_, "else", fn) : nullptr;
-    auto* mergeBB = BasicBlock::Create(ctx_, "endif", fn);
+    auto* thenBB  = BasicBlock::Create(*ctx_, "then", fn);
+    auto* elseBB  = s.elseBranch ? BasicBlock::Create(*ctx_, "else", fn) : nullptr;
+    auto* mergeBB = BasicBlock::Create(*ctx_, "endif", fn);
 
     builder_.CreateCondBr(cond, thenBB, elseBB ? elseBB : mergeBB);
 
