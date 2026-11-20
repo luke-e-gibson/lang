@@ -27,7 +27,7 @@ private:
     std::unique_ptr<llvm::Module> module_;
     llvm::IRBuilder<> builder_;
 
-    struct Var { llvm::AllocaInst* slot; llvm::Type* type; };
+    struct Var { llvm::AllocaInst* slot; llvm::Type* type; bool isConst; };
     std::vector<std::map<std::string, Var>> scopes_;
     std::vector<std::string> errors_;
     llvm::Function* currentFn_ = nullptr;

@@ -222,7 +222,7 @@ bool CodeGen::genStmt(const Stmt& s) {
         if (init->getType()->isVoidTy()) { fail("cannot assign a void value", s.offset); return false; }
         AllocaInst* slot = createEntryAlloca(init->getType(), d.name);
         builder_.CreateStore(init, slot);
-        scopes_.back()[d.name] = {slot, init->getType()};
+        scopes_.back()[d.name] = {slot, init->getType(), d.isConst};
         return true;
     }
     case StmtKind::Return: {
@@ -255,7 +255,10 @@ bool CodeGen::genStmt(const Stmt& s) {
         auto& a = static_cast<const AssignStmt&>(s);
         Var* v = lookup(a.name);
         if (!v) { fail("undefined variable '" + a.name + "'", s.offset); return false; }
-        Value* val = genExpr(*a.value);
+        if (v->isConst) {
+            fail("cannot assign to const variable '" + a.name + "'", s.offset);
+            return false;
+        } Value* val = genExpr(*a.value);
         if (!val) return false;
         val = coerce(val, v->type);
         if (!val) { fail("type mismatch in assignment", s.offset); return false; }
@@ -268,17 +271,17 @@ bool CodeGen::genStmt(const Stmt& s) {
         auto* condBB = BasicBlock::Create(*ctx_, "while.cond", fn);
         auto* bodyBB = BasicBlock::Create(*ctx_, "while.body", fn);
         auto* endBB  = BasicBlock::Create(*ctx_, "while.end", fn);
-    
+
         builder_.CreateBr(condBB);
         builder_.SetInsertPoint(condBB);
         Value* c = genExpr(*w.cond);
         if (!c) return false;
         builder_.CreateCondBr(c, bodyBB, endBB);
-    
+
         builder_.SetInsertPoint(bodyBB);
         if (!genStmt(*w.body)) return false;
         if (!terminated()) builder_.CreateBr(condBB);
-    
+
         builder_.SetInsertPoint(endBB);
         return true;
     }
